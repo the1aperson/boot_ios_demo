@@ -1,0 +1,60 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+import "Localfile"
+
+ENV["QA_APP_ID"] = "145"
+ENV["DAN_APP_ID"] = "147"
+ENV["SLACK_URL"] = "https://hooks.slack.com/services/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"
+
+default_platform(:ios)
+
+platform :ios do
+
+	desc "Upload IPA to App Distro"
+	private_lane :upload_to_appdistro do |options|
+		file_path = lane_context[SharedValues::IPA_OUTPUT_PATH]
+		file_name = file_path.gsub(/\/.*\//,"")
+		sh "echo Uploading " + file_name + " to App Distro"
+		response = sh "curl -s https://appdistro.com/admin/api/add-version?id=" + options[:env] + " -H \"Authorization: Bearer " + ENV["AUTH_TOKEN"] + "\" -F \"file=@" + file_path + "\" -F \"notes=" + options[:notes] + "\" --http1.1"
+		response_object = JSON.parse(response)
+	end
+
+	desc "Build and upload QA app to App Distro & Slack"
+	lane :qabuild do |options|
+		gym(scheme: "BootBarn_iOS_Demo", clean: true, configuration: "Debug" ,export_method: "enterprise")
+		time = Time.new
+		date = time.strftime("%m/%d/%Y")
+		notes = "iOS QA build for " + date + " - " + git_branch
+		env = ENV["QA_APP_ID"]
+		response_object = upload_to_appdistro(notes: notes, env: env)
+		base_url = response_object["base_url"]
+		slack(message: ":apple_logo: " +  base_url + "\n" + notes, default_payloads: [])
+	end
+
+	desc "Build and upload QA app to App Distro & Slack"
+	lane :danbuild do |options|
+		gym(scheme: "BootBarn_iOS_Demo", clean: true, configuration: "Debug" ,export_method: "enterprise")
+		time = Time.new
+		date = time.strftime("%m/%d/%Y")
+		notes = "iOS QA Dan build for " + date + " - " + git_branch
+		env = ENV["DAN_APP_ID"]
+		response_object = upload_to_appdistro(notes: notes, env: env)
+		base_url = response_object["base_url"]
+		slack(message: ":apple_logo: " +  base_url + "\n" + notes, default_payloads: [])
+	end
+
+
+end
